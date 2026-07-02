@@ -14,6 +14,7 @@ use {
         mem,
         ops::{Deref, DerefMut, Index, IndexMut},
     },
+    std::panic::{RefUnwindSafe, UnwindSafe},
 };
 
 /// A copyable, array-backed map with complex keys.
@@ -30,17 +31,10 @@ where
     L: Linearize + ?Sized,
     T: Copy;
 
-/// This custom implementation is guaranteed to always match the exact compiler generated
-/// [Send] implementation thanks to the safety requirement
-/// that `<L as Linearize>::CopyStorage<T>` is always just `[T;N]` for some `N`.
-///
-/// But in some generic contexts (when generic over `L` but with `T : Send`)
-/// the compiler cannot tell that `<L as Linearize>::CopyStorage<T> : Send` because it
-/// doesn't know that `<L as Linearize>::CopyStorage<T>` must be `[T;N]`.
-///
-/// This is necessary for the exact same reason why [StaticCopyMap] exists,
-/// but no one wants a `StaticSendMap` or worse `StaticSendSyncCopyMap`,
-/// and thankfully this can be avoided thanks to this manual implementation.
+// This impl exists to work around the compiler adding an L: <L as Linearize>::CopyStorage<T>: Send bound.
+//
+// SAFETY:
+// see the impl on StaticMap
 unsafe impl<L, T> Send for StaticCopyMap<L, T>
 where
     L: Linearize + ?Sized,
@@ -48,21 +42,46 @@ where
 {
 }
 
-/// This custom implementation is guaranteed to always match the exact compiler generated
-/// [Sync] implementation thanks to the safety requirement
-/// that `<L as Linearize>::CopyStorage<T>` is always just `[T;N]` for some `N`.
-///
-/// But in some generic contexts (when generic over `L` but with `T : Sync`)
-/// the compiler cannot tell that `<L as Linearize>::CopyStorage<T> : Sync` because it
-/// doesn't know that `<L as Linearize>::CopyStorage<T>` must be `[T;N]`.
-///
-/// This is necessary for the exact same reason why [StaticCopyMap] exists,
-/// but no one wants a `StaticSyncMap` or worse `StaticSendSyncCopyMap`,
-/// and thankfully this can be avoided thanks to this manual implementation.
+// This impl exists to work around the compiler adding an L: <L as Linearize>::CopyStorage<T>: Sync bound.
+//
+// SAFETY:
+// see the impl on StaticMap
 unsafe impl<L, T> Sync for StaticCopyMap<L, T>
 where
     L: Linearize + ?Sized,
     T: Sync + Copy,
+{
+}
+
+// This impl exists to work around the compiler adding an <L as Linearize>::CopyStorage<T>: Unpin bound.
+//
+// SAFETY:
+// this is safe, but it is imortant to note that a written it still allows
+// StaticMap to be structurally pinning over its elements,
+// where an unconditional impl would not;
+// rational : see the Sync and Send impl
+impl<L, T> Unpin for StaticCopyMap<L, T>
+where
+    L: Linearize + ?Sized,
+    T: Unpin + Copy,
+{
+}
+
+// This impl exists to work around the compiler adding an <L as Linearize>::CopyStorage<T>: UnwindSafe bound.
+// rational : see the Sync and Send impl
+impl<L, T> UnwindSafe for StaticCopyMap<L, T>
+where
+    L: Linearize + ?Sized,
+    T: UnwindSafe + Copy,
+{
+}
+
+// This impl exists to work around the compiler adding an <L as Linearize>::CopyStorage<T>: RefUnwindSafe bound.
+// rational : see the Sync and Send impl
+impl<L, T> RefUnwindSafe for StaticCopyMap<L, T>
+where
+    L: Linearize + ?Sized,
+    T: RefUnwindSafe + Copy,
 {
 }
 
